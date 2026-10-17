@@ -101,21 +101,21 @@ private fun ConverterScreen(context: Context) {
                 completed = 0
                 total = batch.size
                 scope.launch {
-                    val results = withContext(Dispatchers.IO) {
-                        batch.map { uri ->
-                            val name = displayName(context.contentResolver, uri)
+                    val results = mutableListOf<String>()
+                    for (uri in batch) {
+                        val name = displayName(context.contentResolver, uri)
+                        val result = withContext(Dispatchers.IO) {
                             try {
-                                val result = MediaConverter.convert(context, uri, tree, name)
-                                completed += 1
-                                "$name → $result"
+                                "$name → ${MediaConverter.convert(context, uri, tree, name)}"
                             } catch (e: Exception) {
-                                completed += 1
                                 "$name: FAILED — ${e.message ?: "Unsupported or invalid media"}"
                             }
                         }
+                        results += result
+                        completed += 1
+                        status = results.joinToString("\n")
                     }
                     busy = false
-                    status = results.joinToString("\n")
                 }
             }
         ) { Text("Convert selected files") }
