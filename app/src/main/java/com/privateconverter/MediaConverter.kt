@@ -23,6 +23,63 @@ object MediaConverter {
         }
     }
 
+    /**
+     * Converts a shared image URI to a JPEG in the public Pictures/Private Media Converter
+     * collection. MediaStore makes it visible to gallery apps without broad storage permission.
+     */
+    fun convertImageToPictures(context: Context, source: Uri, originalName: String, jpegQuality: Int = 95): String {
+        val resolver = context.contentResolver
+        val base = originalName.substringBeforeLast('.', originalName).ifBlank { "converted-image" }
+        val relativePath = android.os.Environment.DIRECTORY_PICTURES + "/Private Media Converter/"
+        var outputName = "$base.jpg"
+        var suffix = 1
+        while (true) {
+            val selection = "${android.provider.MediaStore.Images.Media.RELATIVE_PATH} = ? AND ${android.provider.MediaStore.Images.Media.DISPLAY_NAME} = ?"
+            val exists = resolver.query(
+                android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                arrayOf(android.provider.MediaStore.Images.Media._ID),
+                selection,
+                arrayOf(relativePath, outputName),
+                null
+            )?.use { it.moveToFirst() } ?: false
+            if (!exists) break
+            outputName = "$base ($suffix).jpg"
+            suffix++
+        }
+
+        val values = android.content.ContentValues().apply {
+            put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, outputName)
+            put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+            put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, relativePath)
+            put(android.provider.MediaStore.Images.Media.IS_PENDING, 1)
+        }
+        val outputUri = resolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+            ?: throw IOException("Could not create JPG in Pictures")
+        try {
+            val bitmap = ImageDecoder.decodeBitmap(ImageDecoder.createSource(resolver, source)) { decoder, _, _ ->
+                decoder.isMutableRequired = false
+            }
+            try {
+                resolver.openOutputStream(outputUri, "w").use { stream ->
+                    if (stream == null || !bitmap.compress(Bitmap.CompressFormat.JPEG, jpegQuality.coerceIn(50, 100), stream)) {
+                        throw IOException("JPEG encoding failed")
+                    }
+                    stream.flush()
+                }
+            } finally {
+                bitmap.recycle()
+            }
+            val published = android.content.ContentValues().apply {
+                put(android.provider.MediaStore.Images.Media.IS_PENDING, 0)
+            }
+            resolver.update(outputUri, published, null, null)
+            return outputName
+        } catch (e: Exception) {
+            resolver.delete(outputUri, null, null)
+            throw IOException("Could not convert the shared image to JPG. ${e.message}", e)
+        }
+    }
+
     private fun convertImage(context: Context, source: Uri, tree: DocumentFile, name: String, quality: Int): String {
         val outputName = uniqueName(tree, name.substringBeforeLast('.', name) + ".jpg")
         val output = tree.createFile("image/jpeg", outputName) ?: throw IOException("Could not create JPG output")
