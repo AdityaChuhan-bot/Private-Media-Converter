@@ -25,6 +25,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -49,6 +50,7 @@ private fun ConverterScreen(context: Context) {
     var busy by remember { mutableStateOf(false) }
     var completed by remember { mutableIntStateOf(0) }
     var total by remember { mutableIntStateOf(0) }
+    var jpegQuality by remember { mutableFloatStateOf(95f) }
     val scope = rememberCoroutineScope()
 
     val filesPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) {
@@ -77,6 +79,8 @@ private fun ConverterScreen(context: Context) {
             OutlinedButton(onClick = { folderPicker.launch(null) }, enabled = !busy) { Text("Output folder") }
         }
         Text("Selected files: ${selected.size}")
+        Text("JPEG quality: ${jpegQuality.toInt()}%")
+        Slider(value = jpegQuality, onValueChange = { jpegQuality = it }, valueRange = 50f..100f, steps = 9, enabled = !busy)
         LazyColumn(Modifier.weight(1f, fill = true), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             items(selected) { uri ->
                 Card(Modifier.fillMaxWidth()) {
@@ -106,7 +110,7 @@ private fun ConverterScreen(context: Context) {
                         val name = displayName(context.contentResolver, uri)
                         val result = withContext(Dispatchers.IO) {
                             try {
-                                "$name → ${MediaConverter.convert(context, uri, tree, name)}"
+                                "$name → ${MediaConverter.convert(context, uri, tree, name, jpegQuality.toInt())}"
                             } catch (e: Exception) {
                                 "$name: FAILED — ${e.message ?: "Unsupported or invalid media"}"
                             }
