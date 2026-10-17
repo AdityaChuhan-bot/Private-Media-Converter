@@ -12,18 +12,18 @@ import androidx.documentfile.provider.DocumentFile
 import java.io.IOException
 
 object MediaConverter {
-    fun convert(context: Context, source: Uri, outputTreeUri: Uri, originalName: String): String {
+    fun convert(context: Context, source: Uri, outputTreeUri: Uri, originalName: String, jpegQuality: Int = 95): String {
         val tree = DocumentFile.fromTreeUri(context, outputTreeUri)
             ?: throw IOException("Output folder is unavailable")
         val lower = originalName.lowercase()
         return when {
-            lower.endsWith(".heic") || lower.endsWith(".heif") -> convertImage(context, source, tree, originalName)
+            lower.endsWith(".heic") || lower.endsWith(".heif") -> convertImage(context, source, tree, originalName, jpegQuality.coerceIn(50, 100))
             lower.endsWith(".mov") -> convertVideo(context, source, tree, originalName)
             else -> throw IOException("Unsupported extension. Choose a .heic, .heif, or .mov file.")
         }
     }
 
-    private fun convertImage(context: Context, source: Uri, tree: DocumentFile, name: String): String {
+    private fun convertImage(context: Context, source: Uri, tree: DocumentFile, name: String, quality: Int): String {
         val outputName = uniqueName(tree, name.substringBeforeLast('.', name) + ".jpg")
         val output = tree.createFile("image/jpeg", outputName) ?: throw IOException("Could not create JPG output")
         try {
@@ -32,7 +32,7 @@ object MediaConverter {
                 decoder.isMutableRequired = false
             }
             context.contentResolver.openOutputStream(output.uri, "w").use { stream ->
-                if (stream == null || !bitmap.compress(Bitmap.CompressFormat.JPEG, 95, stream)) {
+                if (stream == null || !bitmap.compress(Bitmap.CompressFormat.JPEG, quality, stream)) {
                     throw IOException("JPEG encoding failed")
                 }
                 stream.flush()
